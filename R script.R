@@ -22,6 +22,5 @@ lines(spa, col = "light blue")
 text(spa, row.names(spa), cex = 0.5,col = "red")
 text(70, 10, "upstream", cex = 0,8, col = "red")
 
-range(spe)
-(ab)
+
 

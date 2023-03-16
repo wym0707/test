@@ -20,7 +20,7 @@ dim(species)
 plot(spa, asp =1 , type ="n", xlab ="x(km)", ylab ="y(km)")
 lines(spa, col = "light blue")
 text(spa, row.names(spa), cex = 0.5,col = "red")
-text(70, 10, "upstream", cex = 0,8, col = "green")
+text(70, 10, "upstream", cex = 0,8, col = 
 
 
 

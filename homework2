@@ -1,0 +1,57 @@
+getwd()
+library(ade4)
+library(tidyverse)
+data(doubs,package="ade4")
+class(doubs) 
+doubs
+doubs$fish
+library(tidyverse)
+a<-doubs$fish %>% 
+  mutate(total_fish = rowSums(.[1:27])) 
+print(a)
+#summarizing fish abundance data by sites, and combining env and total fish to a new data frame
+total_fish <- data.frame(a$total_fish)
+print(total_fish)
+doubs$env
+library("dplyr")
+env_fish <- bind_cols(total_fish,doubs$env)
+print(env_fish)
+
+
+
+#removing all rows where any column contains an outlier. 
+env_fish<-env_fish[-c(1,4,6,7,8,11,12,13,14,15),]
+env_fish
+
+
+
+#visualizing the features of the new env_fish set using scatterplot().
+library(tidyverse)
+env_fish %>% gather(-a.total_fish,key="value",value = "env")%>%
+  plot(aes(x=env,y=fish_total))+
+  geom_point()+geom_smooth(se=FALSE)+
+  facet_wrap(-value,scale="free")+
+  theme_bw()
+
+#splitting data into training and test sets, and visualizing the features and targets of the training set
+set.seed(100)
+library(caret)
+index<-caret::createDataPartition(env_fish$a.total_fish,p=0.8,list=FALSE)
+training<-env_fish[index,]
+test<-env_fish[-index,]
+
+
+#Creating and evaluating a baseline model between the environmental variables and the total fish abundance with the tree-based algorithm
+ctrl<-trainControl(method="CV",number=10)
+ctrl<-trainControl(method="repeatedcv",number=15,repeats = 15)
+ctrl<-trainControl(method = "LOOCV")
+
+
+set.seed(900)
+model<-train(a.total_fish ~.,data =training,
+             method = "rf",
+             trControl=ctrl,
+             metric="RMSE",
+             verbose=FALSE)
+model
+plot(model)

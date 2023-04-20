@@ -1,0 +1,165 @@
+#Read in the doubs into your R and delete the site 8 which has no fishes.
+data(doubs, package="ade4")
+spe<-doubs$fish
+spe<-spe[-8,]
+env<-doubs$env
+env<-env[-8,]
+names(spe)
+dim(spe)
+str(spe)
+summary(spe)
+head(spe)
+#Which site has the most species (and how many species)? 
+ab<-table(unlist(spe))
+ab
+library(ggplot2)
+library(ggpubr)
+barplot(ab,las=1,col=gray(5:0/5),
+        xlab="Abundance class",ylab="Frequency")
+#visualize how many species are present at each site
+library(tidyverse)
+site.pre<- rowSums(spe>0)
+barplot(site.pre,main="Species richness",
+        xlab="sites",ylab = "Number of species",
+        col="grey",las=1)
+
+dim(env)
+str(env)
+summary(env)
+head(env)
+#explore colinearity by visualizing correlation between variables
+pairs(env,main="Bivariate Plots of the Environmental Data")
+
+#distances as association measures between sites and clustering
+#How different is the community composition across the 30 sites of the Doubs
+library(vegan)
+library(permute)
+library(lattice)
+spe.pa<-decostand(spe,method="pa")
+spe.bd.pa<-vegdist(spe.pa,method="bray")
+
+#visualization of distance matrices
+source("scripts/coldiss.R")
+coldiss(spe.bd.pa,byrank=FALSE,diag=TRUE)
+#In terms of the fish community composition, which groups of species can you identify? Which groups of species are related to these groups of sites?
+#create a distance matrix from Hellinger transformed Doubs river data and compute the single linkage clustering
+spec.hel<-decostand(spe,method = "hellinger")
+spec.chi<-decostand(spe,method = "chi.square")
+spe.dhel<-vegdist(spec.hel,method = "euclidean")
+spe.dhel.single<-hclust(spe.dhel,method="single")
+plot(spe.dhel.single)
+
+env.pa<-decostand(env,method="pa")
+env.bd.pa<-vegdist(env.pa,method="bray")
+envc.hel<-decostand(env,method = "hellinger")
+envc.chi<-decostand(env,method = "chi.square")
+env.dhel<-vegdist(envc.hel,method = "euclidean")
+env.dhel.single<-hclust(env.dhel,method="single")
+plot(env.dhel.single)
+
+#1.1 PCA - fish data 
+#The first DCA axis length is <3.5,data are suitable for linear ordination methods
+dca<-decorana(spe)
+dca
+dca<-decorana(spec.hel)
+dca
+#For both PCA and RDA,we will be using the rda()function in the vegan package
+#Run a PCA on the Hellinger-transformed data
+spe.h.pca<-rda(spec.hel)
+
+ev<-spe.h.pca$CA$eig#Extract the eigenvalues associated to PCs
+ev[ev>mean(ev)]#Select all elgenvalues above average
+n<-length(ev)# Guttman criterion (visualization)
+barplot(ev,main="Eigenvalues",col="grey",las=2)
+abline(h=mean(ev),col="red3",lwd=2)
+legend("topright","Average eigenvalue",
+       lwd=2,col="red3",bty="n")
+
+biplot(spe.h.pca)
+
+#1.2 PCA -environmental variables
+#Standardizing environmental variables is crucial as you cannot compare the 
+#effects of variables with different units
+env.z<-decostand(env,method = "standardize")
+env.pca<-rda(env.z)
+ev<-env.pca$CA$eig #Extract the eigenvalues associated to the PCs
+ev[ev>mean(ev)] #Select all the eigenvalues above average
+ 
+n<-length(ev) #plot the eigenvalues above average
+barplot(ev,main="Eigenvalues",col="grey",las=2)
+abline(h=mean(ev),col="red3",lwd=2)
+legend("topright","Average eigenvalue",
+       lwd=2,col="red3",bty="n")
+
+biplot(spe.h.pca)
+
+#3.run NMDS on fish abundance
+spe.nmds<-metaMDS(spe,distance='bray',k=2)
+spe.nmds$stress #obtaining stress
+stressplot(spe.nmds,main="Shepard plot")
+#Construct the biplot
+plot(spe.nmds,type="none",
+     main=paste("NMDS/Bray - stress=",
+                round(spe.nmds$stress,3)),
+     xlab=c("NMDS1"),ylab="NMDS2")
+points(scores(spe.nmds,display = "site",
+              choices = c(1,2),
+              pch=21,
+              col="black",
+              bg = "steelblue",
+              cex = 1.2))
+text(scores(spe.nmds,display = "species",choices = c(1)),
+     scores(spe.nmds,display = "species",choices= c(2)),
+     labels = rownames(scores(spe.nmds, display = "species")),
+     col="red",cex = 0.8)
+
+#RDA analysis with R
+dca<-decorana(spe)
+dca
+
+dca1<-decorana(spec.hel)
+dca1
+
+#check for correlations between variables,as constrained ordination methods are sensitive to collinearities,visually look for correlation between variables,and remove the variables are collinear with others
+heatmap(abs(cor(env)),
+        #compute pearson correlation (note they are absolute values)
+        col=rev(heat.colors(6)),
+        Colv = NA,Rowv = NA)
+legend("topright",
+       title = "Absolute \nPearson R",
+       legend = round(seq(0,1,length.out=6),1),
+       y.intersp = 0.7,bty = "n",
+       title.adj = 3,
+       fill = rev(heat.colors(6)))
+eigen(abs(cor(env)))#eigen for tracking col-linearity,and VIF also can do
+library(reshape2)
+#subset(melt(abs(cor(env))),value>.70)
+#Remove 'dsf',which was correlated with many other variables
+env.z<-subset(env.z,select = -dfs)
+
+#02.Select environmental variables
+#Initial RDA with ALL of the environmental data
+spe.rda<-rda(spec.hel ~., data =env.z)
+#perform forward selection on environmental variables using ordiRZstep()，or using the forward.sel function of package packfor
+fwd.sel<-ordiR2step(rda(spec.hel ~ 1,data = env.z),#lower model limit(simple!)
+                    scope = formula(spe.rda),#upper model limit(the "full" model)
+                    direction="forward",
+                    RZscope=TRUE,#can't surpass the "full" model's R2
+                    pstep=1000,
+                    trace = FALSE)#change to TRUE to see the selection process!
+#which varibles are retained by the forward selection?
+#Check the new model with forward-selected variables
+fwd.sel$call
+#0.3.Run the RDA and check its explanatory power
+rda(formula=spec.hel ~ alt + bdo,data = env.z)
+spe.rda.signif<-rda(spec.hel ~alt + oxy + bdo,data = env.z)
+#0.4.Test model significance
+#The significance of  RDA  tested using the function anova.cca()
+anova.cca(spe.rda,step=1000)
+# test the significance of each varible with by="term"
+anova.cca(spe.rda.signif,step =1000,by = "term")
+# test the significance of each canonical axis with by ="axis",Recall that these axes represent the variation in explanatory variables in fewer dimensions
+anova.cca(spe.rda.signif,step=1000, by= "axis")
+
+#0.5 Plot and explain the RDA results
+plot(spe.rda.signif)
